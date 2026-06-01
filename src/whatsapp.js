@@ -1,9 +1,12 @@
-import makeWASocket, {
+import Baileys from "@whiskeysockets/baileys";
+const {
+  default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-} from "@whiskeysockets/baileys";
+} = Baileys;
+
 import { Boom } from "@hapi/boom";
 import pino from "pino";
 import qrTerminal from "qrcode-terminal";
@@ -77,15 +80,12 @@ export async function createWhatsAppClient() {
   });
 
   // ── GROUP ID FINDER ────────────────────────────────────────────────────────
-  // After connecting, send any message in your driver group.
-  // The Group ID will be printed here. Copy it into your .env as WHATSAPP_GROUP_ID
   sock.ev.on("messages.upsert", ({ messages }) => {
     messages.forEach((m) => {
       const jid = m.key.remoteJid;
       if (jid?.endsWith("@g.us")) {
-        console.log("\n✅ FOUND YOUR GROUP ID — copy this into .env:");
-        console.log(`   WHATSAPP_GROUP_ID=${jid}`);
-        console.log("   (you can also set this in Render env vars)\n");
+        console.log("\n✅ FOUND YOUR GROUP ID — copy this into Render env vars:");
+        console.log(`   WHATSAPP_GROUP_ID=${jid}\n`);
       }
     });
   });
