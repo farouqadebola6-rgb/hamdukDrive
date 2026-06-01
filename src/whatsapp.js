@@ -13,7 +13,7 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AUTH_DIR = join(__dirname, "../auth/session");
 
-const logger = pino({ level: "silent" }); // suppress Baileys noise
+const logger = pino({ level: "silent" });
 
 let sock = null;
 
@@ -34,13 +34,13 @@ export async function createWhatsAppClient() {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     logger,
-    printQRInTerminal: false, // we handle QR ourselves below
+    printQRInTerminal: false,
     browser: ["Hamduk Drive", "Chrome", "1.0.0"],
     connectTimeoutMs: 60_000,
     retryRequestDelayMs: 2000,
   });
 
-  // ── QR code ────────────────────────────────────────────────────────────────
+  // ── QR code + connection events ────────────────────────────────────────────
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -69,10 +69,28 @@ export async function createWhatsAppClient() {
 
     if (connection === "open") {
       console.log("[whatsapp] ✅ Connected! Ready to dispatch ride alerts.");
+      console.log("─────────────────────────────────────────────────");
+      console.log("[whatsapp] Send any message in your driver WhatsApp");
+      console.log("[whatsapp] group and the Group ID will print below:");
+      console.log("─────────────────────────────────────────────────");
     }
   });
 
-  // ── Save credentials on update ─────────────────────────────────────────────
+  // ── GROUP ID FINDER ────────────────────────────────────────────────────────
+  // After connecting, send any message in your driver group.
+  // The Group ID will be printed here. Copy it into your .env as WHATSAPP_GROUP_ID
+  sock.ev.on("messages.upsert", ({ messages }) => {
+    messages.forEach((m) => {
+      const jid = m.key.remoteJid;
+      if (jid?.endsWith("@g.us")) {
+        console.log("\n✅ FOUND YOUR GROUP ID — copy this into .env:");
+        console.log(`   WHATSAPP_GROUP_ID=${jid}`);
+        console.log("   (you can also set this in Render env vars)\n");
+      }
+    });
+  });
+
+  // ── Save credentials ───────────────────────────────────────────────────────
   sock.ev.on("creds.update", saveCreds);
 
   return sock;
