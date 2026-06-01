@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: hamduk-drive-whatsapp
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: API_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+    # Persist the WhatsApp session across deploys
+    disk:
+      name: whatsapp-session
+      mountPath: /app/auth
+      sizeGB: 1
