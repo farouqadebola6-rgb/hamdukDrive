@@ -19,12 +19,30 @@ const AUTH_DIR = join(__dirname, "../auth/session");
 const logger = pino({ level: "silent" });
 
 let sock = null;
+let isReady = false; // true only after connection is fully stable
 
 export function getSocket() {
   return sock;
 }
 
+export function isSocketReady() {
+  return isReady;
+}
+
+// Wait up to 10s for socket to be ready, checking every 500ms
+export async function waitForReady(timeoutMs = 10000) {
+  const start = Date.now();
+  while (!isReady) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("WhatsApp socket not ready after timeout");
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
 export async function createWhatsAppClient() {
+  isReady = false;
+
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -43,7 +61,7 @@ export async function createWhatsAppClient() {
     retryRequestDelayMs: 2000,
   });
 
-  // ── QR code + connection events ────────────────────────────────────────────
+  // ── QR + connection ────────────────────────────────────────────────────────
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -54,6 +72,7 @@ export async function createWhatsAppClient() {
     }
 
     if (connection === "close") {
+      isReady = false;
       const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
@@ -71,15 +90,19 @@ export async function createWhatsAppClient() {
     }
 
     if (connection === "open") {
-      console.log("[whatsapp] ✅ Connected! Ready to dispatch ride alerts.");
-      console.log("─────────────────────────────────────────────────");
-      console.log("[whatsapp] Send any message in your driver WhatsApp");
-      console.log("[whatsapp] group and the Group ID will print below:");
-      console.log("─────────────────────────────────────────────────");
+      // Small delay to let the session fully settle before marking ready
+      setTimeout(() => {
+        isReady = true;
+        console.log("[whatsapp] ✅ Connected and ready to dispatch!");
+        console.log("─────────────────────────────────────────────────");
+        console.log("[whatsapp] Send any message in your driver WhatsApp");
+        console.log("[whatsapp] group and the Group ID will print below:");
+        console.log("─────────────────────────────────────────────────");
+      }, 3000);
     }
   });
 
-  // ── GROUP ID FINDER ────────────────────────────────────────────────────────
+  // ── Group ID finder ────────────────────────────────────────────────────────
   sock.ev.on("messages.upsert", ({ messages }) => {
     messages.forEach((m) => {
       const jid = m.key.remoteJid;
